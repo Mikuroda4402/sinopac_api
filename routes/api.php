@@ -17,3 +17,6 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
+
+Route::post('/receive_msg', [\App\Http\Controllers\Controller::class, 'receive_msg']);
+Route::post('/create_order', [\App\Http\Controllers\Controller::class, 'create_order']);
