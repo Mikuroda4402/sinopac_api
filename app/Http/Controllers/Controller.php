@@ -51,11 +51,11 @@ class Controller extends BaseController
     private function initSinopac()
     {
         return new Sinopac(
-            'shop_no',
-            'a1',
-            'a2',
-            'b1',
-            'b2');
+            'NA0249_001',
+            '86D50DEF3EB7400E',
+            '01FD27C09E5549E5',
+            '9E004965F4244953',
+            '7FB3385F414E4F91');
     }
 
     public function create_order(Request $request)
@@ -77,7 +77,38 @@ class Controller extends BaseController
 
         $data = $sinopac->requestDataset('OrderCreate', $data);
         $message = $sinopac->callApi('https://apisbx.sinopac.com/funBIZ/QPay.WebAPI/api/Order', $data);
-        return $message;
+
+        $reply_nonce = $message['Nonce'] | '';
+        if (!$reply_nonce) {
+            $msg = 'Reply message haven\'t Nonce';
+            Log::error($msg , $message);
+            throw new \HttpResponseException($msg);
+        }
+
+        // 1. nonce 計算 iv
+        $iv = $sinopac->calculateIv($reply_nonce);
+        // 2. 計算 hash_id (AES key)
+        $hash_id = $sinopac->calcHashId();
+        // 3. message 解密
+        $decrypt_message = $sinopac->decryptMessage($message['Message'], $hash_id, $iv);
+        // 4. 驗證 sign
+        $sign = $sinopac->generateSign($decrypt_message, $reply_nonce, $hash_id);
+
+        if (!($sign === $message['Sign'])) {
+            throw new \HttpResponseException('驗證錯誤，內文簽章不同');
+        }
+
+        // 這裡的 – 是 \xE2  不是 \x2D
+        $description = explode(' – ', $decrypt_message['Description']);
+        if ($description[0] !== 'S0000') {
+            Log::alert('訂單未建立成功', $decrypt_message['Description']);
+            throw new \HttpResponseException("訂單未建立成功");
+        }
+
+        return [
+            'Reply_Message' => $message,
+            'Decrypt_content' => $decrypt_message
+        ];
     }
 
 }
