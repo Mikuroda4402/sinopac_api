@@ -7,6 +7,7 @@ use Illuminate\Foundation\Bus\DispatchesJobs;
 use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
+use Illuminate\Support\Facades\Log;
 
 class Controller extends BaseController
 {
@@ -58,13 +59,16 @@ class Controller extends BaseController
             '7FB3385F414E4F91');
     }
 
+    /**
+     * @throws \Exception
+     */
     public function create_order(Request $request)
     {
         $sinopac = $this->initSinopac();
         $data = [
             'ShopNo'        => $sinopac->shop_no,
             'OrderNo'       => date('YmdHis'),
-            'Amount'        => random_int(4000, 10000),
+            'Amount'        => random_int(4000, 10000) . '00',
             'CurrencyID'    => 'TWD',
             'PrdtName'      => '大河',
             'ReturnURL'     => 'http://10.11.22.113:8803/QPay.ApiClient-Sandbox/Store/Return',
@@ -82,7 +86,7 @@ class Controller extends BaseController
         if (!$reply_nonce) {
             $msg = 'Reply message haven\'t Nonce';
             Log::error($msg , $message);
-            throw new \HttpResponseException($msg);
+            throw new \Exception($msg);
         }
 
         // 1. nonce 計算 iv
@@ -95,14 +99,14 @@ class Controller extends BaseController
         $sign = $sinopac->generateSign($decrypt_message, $reply_nonce, $hash_id);
 
         if (!($sign === $message['Sign'])) {
-            throw new \HttpResponseException('驗證錯誤，內文簽章不同');
+            throw new \Exception('驗證錯誤，內文簽章不同');
         }
 
         // 這裡的 – 是 \xE2  不是 \x2D
         $description = explode(' – ', $decrypt_message['Description']);
         if ($description[0] !== 'S0000') {
-            Log::alert('訂單未建立成功', $decrypt_message['Description']);
-            throw new \HttpResponseException("訂單未建立成功");
+            Log::alert('訂單未建立成功', $decrypt_message);
+            throw new \Exception("訂單未建立成功");
         }
 
         return [
